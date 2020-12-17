@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="652px" height="570px" viewBox="0 0 652 570" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>test</title>
+    <defs>
+        <rect id="path-1" x="370" y="455" width="69" height="51"></rect>
+        <filter x="-10.1%" y="-9.8%" width="120.3%" height="127.5%" filterUnits="objectBoundingBox" id="filter-2">
+            <feOffset dx="0" dy="2" in="SourceAlpha" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="2" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feComposite in="shadowBlurOuter1" in2="SourceAlpha" operator="out" result="shadowBlurOuter1"></feComposite>
+            <feColorMatrix values="0 0 0 0 0   0 0 0 0 0   0 0 0 0 0  0 0 0 0.5 0" type="matrix" in="shadowBlurOuter1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="----">
+            <g id="Group" transform="translate(110.000000, 115.000000)" stroke="#979797">
+                <g id="Rectangle-2" fill="#D8D8D8">
+                    <rect id="Rectangle" x="0.5" y="0.5" width="445" height="239"></rect>
+                </g>
+                <rect id="Rectangle" fill="#B62C2C" x="71.5" y="50.5" width="72" height="128"></rect>
+            </g>
+            <g id="Rectangle">
+                <use fill="black" fill-opacity="1" filter="url(#filter-2)" xlink:href="#path-1"></use>
+                <rect stroke="#979797" stroke-width="1" stroke-linejoin="square" fill="#2106F8" fill-rule="evenodd" x="370.5" y="455.5" width="68" height="50"></rect>
+            </g>
+            <text id="Type-something" font-family="GothamPro, Gotham Pro" font-size="12" font-weight="normal" letter-spacing="0.171428571" fill="#606060">
+                <tspan x="124" y="412">Type something</tspan>
+            </text>
+            <text id="my-right-align-text" font-family="GothamPro-Medium, Gotham Pro" font-size="16" font-weight="400" fill="#292929">
+                <tspan x="552.712" y="451">Type </tspan>
+                <tspan x="528.568" y="466">somethi</tspan>
+                <tspan x="572.36" y="481">ng</tspan>
+            </text>
+        </g>
+    </g>
+</svg>

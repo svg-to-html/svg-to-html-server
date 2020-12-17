@@ -1,0 +1,17 @@
+(ns %s
+  (:require [reagent.core :as r]
+            [garden.core :as gr]
+            [garden.stylesheet :as gst]
+            [garden.color :as gc]))
+
+(def styles
+  [:style
+   (gr/css
+    [:.contaner
+     {:position :relative
+      :margin "0px"}
+     %s])])
+
+(defn page []
+  [:div.container styles
+   %s])
