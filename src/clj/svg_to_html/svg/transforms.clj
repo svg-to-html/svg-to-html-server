@@ -86,8 +86,7 @@
              (-> x
                  (assoc :width (str size "px"))
                  (assoc :height (str size "px"))
-                 (assoc :border-radius "50%")
-                 (assoc :border-radius (str r "px"))))
+                 (assoc :border-radius "50%")))
            x)))
       (dissoc :stroke :stroke-width :rx :r :stroke-linejoin :stroke-dasharray)))
 

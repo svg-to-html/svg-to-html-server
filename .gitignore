@@ -14,3 +14,4 @@ shadow-cljs.edn
 src/cljs/svg_to_html/test_dom.cljs
 target/
 test-config.edn
+/.lsp/
