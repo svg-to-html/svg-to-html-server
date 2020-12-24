@@ -30,8 +30,8 @@
        (map (fn [[k v]]
               [k
                (if (and
-                    (#{:width :height :top :left :x :y :font-size :letter-spacing} k)
-                    (-> v str (str/ends-with? "px") not))
+                     (#{:width :height :top :left :x :y :cx :cy :font-size :letter-spacing} k)
+                     (-> v str (str/ends-with? "px") not))
                  (px v)
                  v)]))
        (into {})))
@@ -72,7 +72,16 @@
          (if rx
            (assoc x :border-radius (str rx "px"))
            x)))
-      (dissoc :stroke :stroke-width :rx :stroke-linejoin :stroke-dasharray)))
+      ((fn [{:keys [r] :as x}]
+         (if r
+           (let [size (-> r read-string (* 2))]
+             (-> x
+                 (assoc :width (str size "px"))
+                 (assoc :height (str size "px"))
+                 (assoc :border-radius "50%")))
+           x)))
+      (dissoc :stroke :stroke-width :rx :r :stroke-linejoin :stroke-dasharray)))
+
 
 (defn- attrs->style [attrs]
   {:style (-> attrs
@@ -84,9 +93,10 @@
               (add-pixels)
               (border-style)
               (clojure.set/rename-keys
-               {:fill :background-color
-                :fill-opacity :opacity
-                :x :left :y :top})
+                {:fill :background-color
+                 :fill-opacity :opacity
+                 :x :left :y :top
+                 :cx :left :cy :top})
               (dissoc :fill-rule :view-box :version :xlink-href :mask)
               ((fn [x]
                  (->> x
@@ -130,35 +140,42 @@
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)]
     (into
-     [t (attrs->style attrs)]
-     (->> body (map #(transform-tag % svg))))))
+      [t (attrs->style attrs)]
+      (->> body (map #(transform-tag % svg))))))
+
+(defmethod transform-tag :circle [tag svg]
+  (let [[_ id attrs body] (svg/tag-parts tag)
+        t (add-class :div id)]
+    (into
+      [t (attrs->style attrs)]
+      (->> body (map #(transform-tag % svg))))))
 
 (defmethod transform-tag :text [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)
         shift (-> attrs :font-size)]
     (into
-     [t {:data-svg "text"
-         :style (->
-                 attrs
-                 (clojure.set/rename-keys {:fill :color})
-                 add-pixels
-                 (dissoc :stroke-width))}]
-     (->> body
-          (map (fn [x]
-                 (let [[_ id attrs body] (svg/tag-parts x)]
-                   [:div
-                    {:data-svg "tspan"
-                     :style (-> attrs
-                                ((fn [{:keys [y font-size] :as o}]
-                                   (assoc o :y (- (double (round y))
-                                                  (double (round (or font-size shift)))))))
-                                (clojure.set/rename-keys {:fill :color :x :left :y :top})
-                                (select-keys [:font-family :font-size :font-weight :color
-                                              :letter-spacing :top :left])
-                                (assoc :position :absolute :white-space :nowrap)
-                                add-pixels)}
-                    (last body)])))))))
+      [t {:data-svg "text"
+          :style (->
+                   attrs
+                   (clojure.set/rename-keys {:fill :color})
+                   add-pixels
+                   (dissoc :stroke-width))}]
+      (->> body
+           (map (fn [x]
+                  (let [[_ id attrs body] (svg/tag-parts x)]
+                    [:div
+                     {:data-svg "tspan"
+                      :style (-> attrs
+                                 ((fn [{:keys [y font-size] :as o}]
+                                    (assoc o :y (- (double (round y))
+                                                   (double (round (or font-size shift)))))))
+                                 (clojure.set/rename-keys {:fill :color :x :left :y :top})
+                                 (select-keys [:font-family :font-size :font-weight :color
+                                               :letter-spacing :top :left])
+                                 (assoc :position :absolute :white-space :nowrap)
+                                 add-pixels)}
+                     (last body)])))))))
 
 (defmethod transform-tag :tspan [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)]
@@ -187,7 +204,6 @@
            (attrs->style (dissoc attrs :xlink-href)))]))
 
 (defmethod transform-tag :path [tag svg])
-(defmethod transform-tag :circle [tag svg])
 (defmethod transform-tag :ellipse [tag svg])
 (defmethod transform-tag :pattern [tag svg])
 (defmethod transform-tag :mask [tag svg])
