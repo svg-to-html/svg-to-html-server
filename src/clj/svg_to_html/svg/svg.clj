@@ -18,8 +18,6 @@
 (defn tag->id [x]
   (some->> x tag name (re-find #"#(.+$)") second keyword))
 
-(tag->id {:a :b})
-
 (defn tag->name [x]
   (some-> x tag name (str/replace #"#.+$" "") keyword))
 

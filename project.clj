@@ -1,4 +1,4 @@
-(defproject svg-to-html "0.1.0-SNAPSHOT"
+(defproject svg-to-html-server "0.1.0-SNAPSHOT"
 
   :description "FIXME: write description"
   :url "http://example.com/FIXME"
