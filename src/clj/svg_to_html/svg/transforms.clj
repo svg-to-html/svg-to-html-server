@@ -82,12 +82,12 @@
            x)))
       ((fn [{:keys [r] :as x}]
          (if r
-           (let [size (-> read-string (* 2))]
+           (let [size (-> r read-string (* 2))]
              (-> x
                  (assoc :width (str size "px"))
                  (assoc :height (str size "px"))
                  (assoc :border-radius "50%")
-                 (assoc x :border-radius (str rx "px"))))
+                 (assoc :border-radius (str r "px"))))
            x)))
       (dissoc :stroke :stroke-width :rx :r :stroke-linejoin :stroke-dasharray)))
 
@@ -156,11 +156,11 @@
       (->> body (map #(transform-tag % svg))))))
 
 (defmethod transform-tag :circle [tag svg]
-  )(let [[_ id attrs body] (svg/tag-parts tag)
-         t (add-class :div id)]
-     (into
-       [t (attrs->style attrs)]
-       (->> body (map #(transform-tag % svg))))) ;; div with border-radius
+  (let [[_ id attrs body] (svg/tag-parts tag)
+        t (add-class :div id)]
+    (into
+      [t (attrs->style attrs)]
+      (->> body (map #(transform-tag % svg)))))) ;; div with border-radius
 
 (defmethod transform-tag :text [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
