@@ -97,14 +97,16 @@
          (if rx
            (assoc x :border-radius (str rx "px"))
            x)))
-      ((fn [{:keys [r] :as x}]
-         (if r
-           (let [size (-> r read-string (* 2))]
+      ((fn [{:keys [cx cy rx ry r] :as x}]
+         (if (and cx cy)
+           (let [sizes (cond
+                         r [r r]
+                         (and rx ry) [rx ry])
+                 [w h] (mapv (comp (partial * 2) read-string) sizes)]
              (-> x
-                 (assoc :width (str size "px"))
-                 (assoc :height (str size "px"))
-                 (assoc :border-radius "50%")
-                 (assoc :border-radius (str r "px"))))
+                 (assoc :width (str w "px"))
+                 (assoc :height (str h "px"))
+                 (assoc :border-radius "50%")))
            x)))
       (dissoc :stroke :stroke-width :rx :r :stroke-linejoin :stroke-dasharray)))
 
@@ -184,7 +186,14 @@
         t (add-class :div id)]
     (into
       [t (attrs->style attrs)]
-      (->> body (map #(transform-tag % svg)))))) ;; div with border-radius
+      (->> body (map #(transform-tag % svg))))))
+
+(defmethod transform-tag :ellipse [tag svg]
+  (let [[_ id attrs body] (svg/tag-parts tag)
+        t (add-class :div id)]
+    (into
+      [t (attrs->style attrs)]
+      (->> body (map #(transform-tag % svg))))))
 
 (defmethod transform-tag :text [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
@@ -245,25 +254,23 @@
         bounds (select-keys attrs [:width :height])
         {:keys [width height]} bounds
         file-path  (save-svg id (h/html
-                                 [:svg
-                                  (merge
-                                   {:viewBox (str "0 0 " width " " height)
-                                    :version "1.1"
-                                    :xmlns "http://www.w3.org/2000/svg"
-                                    :xmlns:xlink "http://www.w3.org/1999/xlink"}
-                                   (transform-to-pos (select-keys attrs [:width :height])))
-                                  (svg/find-tag svg :defs)
-                                  tag]))]
+                                  [:svg
+                                   (merge
+                                     {:viewBox (str "0 0 " width " " height)
+                                      :version "1.1"
+                                      :xmlns "http://www.w3.org/2000/svg"
+                                      :xmlns:xlink "http://www.w3.org/1999/xlink"}
+                                     (transform-to-pos (select-keys attrs [:width :height])))
+                                   (svg/find-tag svg :defs)
+                                   tag]))]
     [:img (merge
-           {:src file-path :style {:position :absolute}}
-           (transform-to-pos bounds))]))
-
+            {:src file-path :style {:position :absolute}}
+            (transform-to-pos bounds))]))
 
 (defmethod transform-tag :defs [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)]
     (doseq [tag body]
       (transform-tag tag svg))))
-
 
 (defmethod transform-tag :pattern [tag svg]
   (let [[_ id] (svg/tag-parts tag)
@@ -278,7 +285,6 @@
                                                 :fill (format "url(#%s)" id)}]]))]
     nil))
 
-(defmethod transform-tag :ellipse [tag svg]) ;; div with border-radius
 (defmethod transform-tag :mask [tag svg]) ;; div
 (defmethod transform-tag :default [tag svg])
 
