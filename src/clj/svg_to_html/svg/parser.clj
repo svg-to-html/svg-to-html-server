@@ -9,19 +9,29 @@
 (def fix-keys {:viewbox :viewBox
                :filterunits :filterUnits
                :stddeviation :stdDeviation
-               :xlink:href :xlinkHref})
+               :xlink:href :xlinkHref
+               :patternunits :pattern-units})
+
+(defn- remove-buildins [s]
+  (-> s
+      (str/replace #"^(.+)(#Shape|#Group|#Oval|#Rectangle|#Combined|#Path).*" "$1")))
+
+(defn- optimize-ids [s]
+  (->
+   s
+   (str/replace #"[:]$" "")
+   (str/replace #"[,$]" "")
+   (str/replace #"-+" "-")))
+
+(defn fix-tag-name [tag]
+  (-> tag
+      name
+      remove-buildins
+      optimize-ids
+      keyword))
 
 (defn tag->id [x]
   (some->> x name (re-find #"#(.+$)") second))
-
-(defn fix-tag-name [tag]
-  (if (when-let [tag-name (tag->id tag)]
-       (or
-        (re-find #"----" tag-name)
-        (str/includes? tag-name " ")
-        (not= tag-name (str/lower-case tag-name))))
-    (->> tag name (re-find #"^(.+)#.+$") second keyword)
-    tag))
 
 (defn transform-keys [m f]
   (let [fm (fn [[k v]] [(f (or (get fix-keys k) k)) v])]

@@ -3,9 +3,11 @@
             [svg-to-html.svg.util :as util]
             [clojure.string :as str]
             [clojure.walk :as walk]
+            [hiccup.core :as h]
             [svg-to-html.svg.b64-file :as b64-file]
             [svg-to-html.svg.dom :as dom]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.pprint :as pp]))
 
 (def ^:dynamic config {:base-dir "resources/public"
                        :img "gen-img"})
@@ -130,13 +132,17 @@
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)
         group-content (into
-                       [(add-class :div id) {:style {:position :relative}}]
+                       [(add-class :div id) {:style {:position :relative
+                                                     :min-width "2000px"
+                                                     }}]
                        (->> body (map
                                   #(transform-tag
                                     (inject-attrs % (dissoc attrs :transform ))
                                     svg))))]
     (if (:transform attrs)
-      [:div {:style (merge {:position :absolute}
+      [:div {:style (merge {:position :absolute
+                            ;; :overflow :hidden
+                            }
                            (transform-to-pos
                             (select-keys attrs [:transform])))}
        group-content]
@@ -201,13 +207,22 @@
        (inject-attrs tag attrs))
      svg)))
 
+(defn get-image-file-path [id ext]
+  (str (:img config) "/" (or (some-> id name) (util/uuid)) "." ext))
+
 (defn save-base64 [id base-64]
-  (let [images-dir (str (:base-dir config) "/" (:img config))
-        file-path  (str images-dir "/" (or (some-> id name )
-                                           (util/uuid)) "." (b64-file/b64-ext base-64))]
-    (io/make-parents (io/file file-path))
-    (b64-file/write-img! base-64 (io/file file-path))
-    (-> file-path (str/replace-first (:base-dir config) ""))))
+  (let [file-path  (get-image-file-path id (b64-file/b64-ext base-64))
+        file (io/file (str (:base-dir config) "/" file-path))]
+    (io/make-parents file)
+    (b64-file/write-img! base-64 file)
+    file-path))
+
+(defn save-svg [id content]
+  (let [file-path  (get-image-file-path id "svg")
+        file (io/file (str (:base-dir config) "/" file-path))]
+    (io/make-parents file)
+    (spit file content)
+    file-path))
 
 (defmethod transform-tag :image [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
@@ -218,7 +233,24 @@
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
-(defmethod transform-tag :path [tag svg]) ;; external svg file
+(defmethod transform-tag :path [tag svg]
+  (let [[_ id attrs body] (svg/tag-parts tag)
+        bounds (select-keys attrs [:width :height])
+        {:keys [width height]} bounds
+        file-path  (save-svg id (h/html
+                                 [:svg
+                                  (merge
+                                   {:viewBox (str "0 0 " width " " height)
+                                    :version "1.1"
+                                    :xmlns "http://www.w3.org/2000/svg"
+                                    :xmlns:xlink "http://www.w3.org/1999/xlink"}
+                                   (transform-to-pos (select-keys attrs [:width :height])))
+                                  (svg/find-tag svg :defs)
+                                  tag]))]
+    [:img (merge
+           {:src file-path :style {:position :absolute}}
+           (transform-to-pos bounds))]))
+
 (defmethod transform-tag :ellipse [tag svg]) ;; div with border-radius
 (defmethod transform-tag :pattern [tag svg]) ;; div with background image
 (defmethod transform-tag :mask [tag svg]) ;; div
@@ -249,14 +281,15 @@
    dom))
 
 (defn transform [svg & [config]]
+  #_(when-let [img-dir (io/resource (str "public/" (:img config)))]
+    (io/delete-file img-dir))
   (-> (transform-tag svg svg)
       inline-divs
       add-bounds-to-relative
-      ;; group-svg
-      ;; extract-svg
+      ;; group-svgs
       ;; add-flex-layout
-      ;; extractor-styles
-
+      ;; optimize-texts
+      ;; extract-styles
 
       ))
 
