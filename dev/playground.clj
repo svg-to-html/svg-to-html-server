@@ -11,4 +11,11 @@
        parser/parse-svg
        transforms/transform
        hiccup/html
-       (spit (io/file "dev/test-tag.html"))))
+       (spit (io/file "dev/test-tag.html")))
+
+
+  (->> "dev/test-pattern.svg"
+       parser/parse-svg
+       transforms/transform
+       hiccup/html
+       (spit (io/file "dev/test-pattern.html"))))
