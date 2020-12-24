@@ -3,7 +3,12 @@
             [svg-to-html.svg.util :as util]
             [clojure.string :as str]
             [clojure.walk :as walk]
-            [svg-to-html.svg.dom :as dom]))
+            [svg-to-html.svg.b64-file :as b64-file]
+            [svg-to-html.svg.dom :as dom]
+            [clojure.java.io :as io]))
+
+(def ^:dynamic config {:base-dir "resources/public"
+                       :img "gen-img"})
 
 (defn- round [x]
   (cond
@@ -180,10 +185,16 @@
      svg)))
 
 (defmethod transform-tag :image [tag svg]
+  ;; #dbg
   (let [[_ id attrs body] (svg/tag-parts tag)
-        base-64 (:xlink-href attrs)]
+        base-64 (:xlink-href attrs)
+        images-dir (str (:base-dir config) "/" (:img config))
+        file-path  (str images-dir "/" (or (some-> id name )
+                                           (util/uuid)) "." (b64-file/b64-ext base-64))]
+    (io/make-parents (io/file file-path))
+    (b64-file/write-img! base-64 (io/file file-path))
     [:img (merge
-           {:src base-64}
+           {:src (-> file-path (str/replace-first (:base-dir config) ""))}
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
@@ -219,11 +230,10 @@
        x))
    dom))
 
-(defn transform [svg]
+(defn transform [svg & [config]]
   (-> (transform-tag svg svg)
       inline-divs
       add-bounds-to-relative
-      ;; extract-bitmaps
       ;; group-svg
       ;; extract-svg
       ;; add-flex-layout
