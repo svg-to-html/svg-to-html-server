@@ -2,7 +2,8 @@
   (:require [svg-to-html.svg.svg :as svg]
             [svg-to-html.svg.util :as util]
             [clojure.string :as str]
-            [clojure.walk :as walk]))
+            [clojure.walk :as walk]
+            [svg-to-html.svg.dom :as dom]))
 
 (defn- round [x]
   (cond
@@ -114,7 +115,7 @@
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)
         group-content (into
-                       [(add-class :div id) {:style {:position "relative"}}]
+                       [(add-class :div id) {:style {:position :relative}}]
                        (->> body (map
                                   #(transform-tag
                                     (inject-attrs % (dissoc attrs :transform ))
@@ -186,17 +187,17 @@
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
-(defmethod transform-tag :path [tag svg])
-(defmethod transform-tag :circle [tag svg])
-(defmethod transform-tag :ellipse [tag svg])
-(defmethod transform-tag :pattern [tag svg])
-(defmethod transform-tag :mask [tag svg])
+(defmethod transform-tag :path [tag svg]) ;; external svg file
+(defmethod transform-tag :circle [tag svg]) ;; div with border-radius
+(defmethod transform-tag :ellipse [tag svg]) ;; div with border-radius
+(defmethod transform-tag :pattern [tag svg]) ;; div with background image
+(defmethod transform-tag :mask [tag svg]) ;; div
 (defmethod transform-tag :default [tag svg])
 
 (defn- relative-div? [x]
   (when (vector? x)
    (let [[_ _ attrs _] (svg/tag-parts x)]
-     (= attrs {:style {:position "relative"}}))))
+     (-> attrs :style :position (= :relative)))))
 
 (defn- inline-divs [dom]
   (walk/postwalk
@@ -206,13 +207,32 @@
        x))
    dom))
 
+(defn add-bounds-to-relative [dom]
+  (walk/postwalk
+   (fn [x]
+     (if (relative-div? x)
+       (let [w (dom/get-max-images-width x)]
+         (if (pos? w)
+           (do
+            (assoc-in x [1 :style :min-width] (str w "px")))
+           x))
+       x))
+   dom))
+
 (defn transform [svg]
   (-> (transform-tag svg svg)
-      inline-divs))
+      inline-divs
+      add-bounds-to-relative
+      ;; extract-bitmaps
+      ;; group-svg
+      ;; extract-svg
+      ;; add-flex-layout
+      ;; extractor-styles
+
+
+      ))
 
 (comment
-
-  
 
   (svg-to-html.svg.core/svg->cljs
    "resources/svg/test.svg"
