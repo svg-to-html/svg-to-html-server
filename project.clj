@@ -115,7 +115,7 @@
                                  [jonase/eastwood "0.3.5"]]
 
 
-                  :source-paths ["env/dev/clj"  "env/dev/cljs" "test/cljs" ]
+                  :source-paths ["env/dev/clj"  "env/dev/cljs" "test/cljs" "dev"]
                   :resource-paths ["env/dev/resources"]
                   :repl-options {:init-ns user
                                  :timeout 120000}

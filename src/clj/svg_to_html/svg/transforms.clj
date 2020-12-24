@@ -12,6 +12,23 @@
 (def ^:dynamic config {:base-dir "resources/public"
                        :img "gen-img"})
 
+(defn get-image-file-path [id ext]
+  (str (:img config) "/" (or (some-> id name) (util/uuid)) "." ext))
+
+(defn save-base64 [id base-64]
+  (let [file-path  (get-image-file-path id (b64-file/b64-ext base-64))
+        file (io/file (str (:base-dir config) "/" file-path))]
+    (io/make-parents file)
+    (b64-file/write-img! base-64 file)
+    file-path))
+
+(defn save-svg [id content]
+  (let [file-path  (get-image-file-path id "svg")
+        file (io/file (str (:base-dir config) "/" file-path))]
+    (io/make-parents file)
+    (spit file content)
+    file-path))
+
 (defn- round [x]
   (cond
     (nil? x) 0
@@ -111,7 +128,14 @@
               ((fn [x]
                  (->> x
                       (remove #(-> % second (= "none")))
-                      (into {})))))})
+                      (into {}))))
+              ((fn [x]
+                 (if-let [[_ id] (some->> (:background-color x)
+                                          (re-matches #"url\(#(.+)\)"))]
+                   (-> x
+                       (dissoc :background-color)
+                       (assoc :background-image (format "url(%s)" (get-image-file-path id "svg"))))
+                   x))))})
 
 (defmulti transform-tag (fn [tag svg] (svg/tag->name tag)))
 
@@ -216,23 +240,6 @@
        (inject-attrs tag attrs))
      svg)))
 
-(defn get-image-file-path [id ext]
-  (str (:img config) "/" (or (some-> id name) (util/uuid)) "." ext))
-
-(defn save-base64 [id base-64]
-  (let [file-path  (get-image-file-path id (b64-file/b64-ext base-64))
-        file (io/file (str (:base-dir config) "/" file-path))]
-    (io/make-parents file)
-    (b64-file/write-img! base-64 file)
-    file-path))
-
-(defn save-svg [id content]
-  (let [file-path  (get-image-file-path id "svg")
-        file (io/file (str (:base-dir config) "/" file-path))]
-    (io/make-parents file)
-    (spit file content)
-    file-path))
-
 (defmethod transform-tag :image [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         base-64 (:xlink-href attrs)
@@ -260,7 +267,24 @@
             {:src file-path :style {:position :absolute}}
             (transform-to-pos bounds))]))
 
-(defmethod transform-tag :pattern [tag svg]) ;; div with background image
+(defmethod transform-tag :defs [tag svg]
+  (let [[_ _ _ body] (svg/tag-parts tag)]
+    (doseq [tag body]
+      (transform-tag tag svg))))
+
+(defmethod transform-tag :pattern [tag svg]
+  (let [[_ id] (svg/tag-parts tag)
+        file-path (save-svg id (h/html [:svg {:version "1.1"
+                                              :width "100%"
+                                              :height "100%"
+                                              :xmlns "http://www.w3.org/2000/svg"
+                                              :xmlns:xlink "http://www.w3.org/1999/xlink"}
+                                        [:defs tag]
+                                        [:rect {:width "100%"
+                                                :height "100%"
+                                                :fill (format "url(#%s)" id)}]]))]
+    nil))
+
 (defmethod transform-tag :mask [tag svg]) ;; div
 (defmethod transform-tag :default [tag svg])
 
