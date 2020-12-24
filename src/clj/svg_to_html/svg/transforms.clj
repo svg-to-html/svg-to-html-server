@@ -201,17 +201,20 @@
        (inject-attrs tag attrs))
      svg)))
 
-(defmethod transform-tag :image [tag svg]
-  ;; #dbg
-  (let [[_ id attrs body] (svg/tag-parts tag)
-        base-64 (:xlink-href attrs)
-        images-dir (str (:base-dir config) "/" (:img config))
+(defn save-base64 [id base-64]
+  (let [images-dir (str (:base-dir config) "/" (:img config))
         file-path  (str images-dir "/" (or (some-> id name )
                                            (util/uuid)) "." (b64-file/b64-ext base-64))]
     (io/make-parents (io/file file-path))
     (b64-file/write-img! base-64 (io/file file-path))
+    (-> file-path (str/replace-first (:base-dir config) ""))))
+
+(defmethod transform-tag :image [tag svg]
+  (let [[_ id attrs body] (svg/tag-parts tag)
+        base-64 (:xlink-href attrs)
+        file-path  (save-base64 id base-64)]
     [:img (merge
-           {:src (-> file-path (str/replace-first (:base-dir config) ""))}
+           {:src file-path}
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
@@ -240,8 +243,7 @@
      (if (relative-div? x)
        (let [w (dom/get-max-images-width x)]
          (if (pos? w)
-           (do
-            (assoc-in x [1 :style :min-width] (str w "px")))
+           (assoc-in x [1 :style :min-width] (str w "px"))
            x))
        x))
    dom))
