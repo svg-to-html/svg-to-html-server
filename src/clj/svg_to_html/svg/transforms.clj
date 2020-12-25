@@ -55,8 +55,8 @@
        (map (fn [[k v]]
               [k
                (if (and
-                     (#{:width :height :top :left :x :y :cx :cy :font-size :letter-spacing} k)
-                     (-> v str (str/ends-with? "px") not))
+                    (#{:width :height :top :left :x :y :font-size :letter-spacing} k)
+                    (-> v str (str/ends-with? "px") not))
                  (px v)
                  v)]))
        (into {})))
@@ -82,10 +82,10 @@
   (-> x
       ((fn [{:keys [stroke stroke-width stroke-dasharray] :as x}]
          (if (and
-               (nil? stroke-dasharray)
-               (or (nil? stroke)
-                   (= stroke "none")
-                   (= stroke-width "0")))
+              (nil? stroke-dasharray)
+              (or (nil? stroke)
+                  (= stroke "none")
+                  (= stroke-width "0")))
            x
            (assoc x :border (str (if stroke-dasharray
                                    "1"
@@ -98,17 +98,21 @@
            (assoc x :border-radius (str rx "px"))
            x)))
       ((fn [{:keys [cx cy rx ry r] :as x}]
+         (prn cx cy)
          (if (and cx cy)
            (let [sizes (cond
                          r [r r]
                          (and rx ry) [rx ry])
-                 [w h] (mapv (comp (partial * 2) read-string) sizes)]
+                 [w h] (mapv (comp (partial * 2) read-string) sizes)
+                 [left top] (mapv (comp  #(- % (/ % 2)) read-string) [cx cy])]
              (-> x
                  (assoc :width (str w "px"))
                  (assoc :height (str h "px"))
-                 (assoc :border-radius "50%")))
+                 (assoc :border-radius "50%")
+                 (assoc :left (str left "px"))
+                 (assoc :top (str top "px"))))
            x)))
-      (dissoc :stroke :stroke-width :rx :r :stroke-linejoin :stroke-dasharray)))
+      (dissoc :stroke :stroke-width :rx :ry :r :cx :cy :stroke-linejoin :stroke-dasharray)))
 
 (defn- attrs->style [attrs]
   {:style (-> attrs
@@ -120,10 +124,9 @@
               (add-pixels)
               (border-style)
               (clojure.set/rename-keys
-                {:fill :background-color
-                 :fill-opacity :opacity
-                 :x :left :y :top
-                 :cx :left :cy :top})
+               {:fill :background-color
+                :fill-opacity :opacity
+                :x :left :y :top})
               (dissoc :fill-rule :view-box :version :xlink-href :mask)
               ((fn [x]
                  (->> x
