@@ -137,7 +137,14 @@
                        (assoc :background-image (format "url(%s)" (get-image-file-path id "svg"))))
                    x))))})
 
-(defmulti transform-tag (fn [tag svg] (svg/tag->name tag)))
+(defn mask? []
+  false)
+
+(defmulti transform-tag
+  (fn [tag svg]
+    (cond
+      (mask? tag) :group-with-mask
+      :else (svg/tag->name tag))))
 
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
@@ -328,7 +335,7 @@
 (comment
 
   (svg-to-html.svg.core/svg->cljs
-   "resources/svg/test.svg"
+   "resources/svg/test-2.svg"
    "src/cljs/svg_to_html/test_dom.cljs"
    "svg-to-html.test-dom")
 
