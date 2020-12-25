@@ -384,7 +384,7 @@
 (comment
 
   (svg-to-html.svg.core/svg->cljs
-   "resources/svg/test-2.svg"
+   "resources/svg/test.svg"
    "src/cljs/svg_to_html/test_dom.cljs"
    "svg-to-html.test-dom")
 

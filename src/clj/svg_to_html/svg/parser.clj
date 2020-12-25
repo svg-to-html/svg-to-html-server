@@ -12,37 +12,68 @@
                :xlink:href :xlinkHref
                :patternunits :pattern-units})
 
+(defn tag->id [x]
+  (some-> x name (str/split #"#") second))
+
+(defn tag->name [x]
+  (some-> x name (str/split #"#") first))
+
+
 (defn- remove-buildins [s]
   (-> s
       (str/replace #"^(.+)(#Shape|#Group|#Oval|#Rectangle|#Combined|#Path).*" "$1")))
 
-(defn- optimize-ids [s]
-  (->
-   s
-   (str/replace #"[:]$" "")
-   (str/replace #"[,$]" "")
-   (str/replace #"-+" "-")))
+(defn optimize-id [s]
+  (-> s
+      (str/trim)
+      (str/replace #"\s" "-")
+      (str/replace #"[:]$" "")
+      (str/replace #"[,$]" "")
+      (str/replace #"[\-_]+" "-")
+      ->kebab-case))
+
+(defn- optimize-tag-name [s]
+  (if-let [id (tag->id s)]
+    (str (tag->name s) "#" (optimize-id id))
+    s))
 
 (defn fix-tag-name [tag]
   (-> tag
       name
       remove-buildins
-      optimize-ids
+      optimize-tag-name
       keyword))
 
-(defn tag->id [x]
-  (some->> x name (re-find #"#(.+$)") second))
+(defn link? [s]
+  (and
+   (str/starts-with? s "url(#")
+   (str/ends-with? s ")")))
 
-(defn transform-keys [m f]
-  (let [fm (fn [[k v]] [(f (or (get fix-keys k) k)) v])]
-    (walk/postwalk (fn [x]
-                     (cond
-                       (map? x) (into {} (map fm x))
-                       (vector? x) (update x 0 fix-tag-name)
-                       :else x)) m)))
+(defn fix-link [s]
+  (if (link? s)
+    (str
+     "url(#"
+     (-> (re-find #"#(.+)\)" s)
+         second
+         optimize-id)
+     ")")
+    s))
 
-(defn all-keys-camel-to-dash [m]
-  (transform-keys m ->kebab-case-keyword))
+(defn transformations [m]
+  (walk/postwalk (fn [x]
+                   (cond
+                     (map? x) (->> x
+                                   (map (fn [[k v]]
+                                          [(->kebab-case-keyword (or (get fix-keys k) k)) v]))
+                                   (map (fn [[k v]]
+                                          (if (and
+                                               (string? v)
+                                               (str/starts-with? v "url(#"))
+                                            [k (fix-link v)]
+                                            [k v])))
+                                   (into {}))
+                     (vector? x) (update x 0 fix-tag-name)
+                     :else x)) m))
 
 (defn svg->hiccup [s]
   (-> s
@@ -60,7 +91,7 @@
 (defn parse-svg [svg-file]
   (-> svg-file
       svg->hiccup
-      all-keys-camel-to-dash))
+      transformations))
 
 (defn dump-svg-file [svg-file namespace]
   (let [path (str "src/cljs/art/" namespace  ".cljs")]
