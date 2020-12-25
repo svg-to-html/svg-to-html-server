@@ -4,7 +4,8 @@
             [clojure.walk :as walk]
             [camel-snake-kebab.core :as keb :refer [->camelCase ->kebab-case ->kebab-case-keyword]]
             [pl.danieljanus.tagsoup :as tagsoap]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [svg-to-html.svg.util :as util]))
 
 (def fix-keys {:viewbox :viewBox
                :filterunits :filterUnits
@@ -21,14 +22,14 @@
 
 (defn- remove-buildins [s]
   (-> s
-      (str/replace #"^(.+)(#Shape|#Group|#Oval|#Rectangle|#Combined|#Path).*" "$1")))
+      (str/replace #"^(.+)(#Shape|#Group|#Oval|#Rectangle|#Combined|#Path|#Bitmap).*" "$1")))
 
 (defn optimize-id [s]
   (-> s
       (str/trim)
       (str/replace #"\s" "-")
       (str/replace #"[:]$" "")
-      (str/replace #"[,$]" "")
+      (str/replace #"[,!~\":'$]" "")
       (str/replace #"[\-_]+" "-")
       ->kebab-case))
 
