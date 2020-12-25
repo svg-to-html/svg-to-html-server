@@ -9,8 +9,7 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pp]))
 
-(def ^:dynamic config {:base-dir "resources/public"
-                       :img "gen-img"})
+(def ^:dynamic config {:base-dir "resources/public" :img "gen-img"})
 
 (def known-patterns (atom {}))
 
@@ -82,7 +81,7 @@
        (map (fn [[k v]]
               [k
                (if (and
-                    (#{:width :height :top :left :x :y :font-size :letter-spacing} k)
+                    (#{:width :height :top :left :x :y :font-size :letter-spacing :line-spacing} k)
                     (-> v str (str/ends-with? "px") not))
                  (px v)
                  v)]))
@@ -141,6 +140,9 @@
            x)))
       (dissoc :stroke :stroke-width :rx :ry :r :cx :cy :stroke-linejoin :stroke-dasharray)))
 
+(defn remove-svg-styles [x]
+  (dissoc x :fill-rule :view-box :version :xlink-href :mask :fill-rule :stroke))
+
 (defn- attrs->style [attrs]
   {:style (-> attrs
               (transform-to-pos)
@@ -155,7 +157,7 @@
                {:fill :background-color
                 :fill-opacity :opacity
                 :x :left :y :top})
-              (dissoc :fill-rule :view-box :version :xlink-href :mask)
+              (remove-svg-styles)
               ((fn [x]
                  (->> x
                       (remove #(-> % second (= "none")))
@@ -255,8 +257,7 @@
         t (add-class :div id)
         shift (-> attrs :font-size)]
     (into
-      [t {:data-svg "text"
-          :style (->
+      [t {:style (->
                    attrs
                    (clojure.set/rename-keys {:fill :color})
                    add-pixels
@@ -265,8 +266,7 @@
            (map (fn [x]
                   (let [[_ id attrs body] (svg/tag-parts x)]
                     [:div
-                     {:data-svg "tspan"
-                      :style (-> attrs
+                     {:style (-> attrs
                                  ((fn [{:keys [y font-size] :as o}]
                                     (assoc o :y (- (double (round y))
                                                    (double (round (or font-size shift)))))))
@@ -368,23 +368,61 @@
        x))
    dom))
 
+(defn get-class [t]
+  (when (-> t name (str/includes? "."))
+   (-> t name (str/split #"\.") last)))
+
+(defn remove-style-attrs [x]
+  (if (vector? x)
+   (let [[t attrs & body] x]
+     (assert (map? attrs))
+     (into
+      [t (if-not (get-class t)
+           attrs
+           (dissoc attrs :style))]
+      (->> body (map remove-style-attrs))))
+   x))
+
+(defn create-styles [x]
+  (when (vector? x)
+   (let [[t attrs & body] x]
+     (assert (map? attrs))
+     (if (get-class t)
+       (into
+        [(keyword (str "." (get-class t))) (remove-svg-styles (:style attrs))]
+        (->> body (map create-styles)))
+       (->> body (map create-styles) vec)))))
+
+(defn extract-styles [dom]
+  (if (:inline-styles config)
+    [nil dom]
+    [
+     (->>
+      dom
+      create-styles
+      util/drop-blanks
+      (walk/postwalk
+       (fn [x]
+         (if (and (vector? x) (-> x count (= 1)))
+           (first x)
+           x))))
+     (util/drop-blanks (remove-style-attrs dom))]))
+
 (defn transform [svg & [config]]
-  #_(when-let [img-dir (io/resource (str "public/" (:img config)))]
-    (io/delete-file img-dir))
+  (when-let [img-dir (io/resource (str "public/" (:img config)))]
+    (->> img-dir io/file .listFiles (map io/delete-file)))
   (-> (transform-tag svg svg)
       inline-divs
       add-bounds-to-relative
       ;; group-svgs
       ;; add-flex-layout
       ;; optimize-texts
-      ;; extract-styles
-
-      ))
+      extract-styles))
 
 (comment
 
   (svg-to-html.svg.core/svg->cljs
-   "resources/svg/test.svg"
+   "resources/svg/upload.svg"
    "src/cljs/svg_to_html/test_dom.cljs"
    "svg-to-html.test-dom")
 
