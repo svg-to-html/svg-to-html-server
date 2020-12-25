@@ -98,13 +98,13 @@
            (assoc x :border-radius (str rx "px"))
            x)))
       ((fn [{:keys [cx cy rx ry r] :as x}]
-         (prn cx cy)
          (if (and cx cy)
            (let [sizes (cond
-                         r [r r]
-                         (and rx ry) [rx ry])
-                 [w h] (mapv (comp (partial * 2) read-string) sizes)
-                 [left top] (mapv (comp  #(- % (/ % 2)) read-string) [cx cy])]
+                         r (mapv read-string [r r])
+                         (and rx ry) (mapv read-string [rx ry]))
+                 [w h] (mapv (partial * 2) sizes)
+                 [cx cy] (mapv read-string [cx cy])
+                 [left top] (mapv - [cx cy] sizes)]
              (-> x
                  (assoc :width (str w "px"))
                  (assoc :height (str h "px"))
@@ -140,14 +140,8 @@
                        (assoc :background-image (format "url(%s)" (get-image-file-path id "svg"))))
                    x))))})
 
-(defn mask? []
-  false)
-
 (defmulti transform-tag
-  (fn [tag svg]
-    (cond
-      (mask? tag) :group-with-mask
-      :else (svg/tag->name tag))))
+  (fn [tag svg] (svg/tag->name tag)))
 
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
