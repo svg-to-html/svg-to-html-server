@@ -12,6 +12,8 @@
 (def ^:dynamic config {:base-dir "resources/public"
                        :img "gen-img"})
 
+(def defs (atom {}))
+
 (defn get-image-file-path [id ext]
   (str (:img config) "/" (or (some-> id name) (util/uuid)) "." ext))
 
@@ -66,7 +68,39 @@
     (-> attrs
         (dissoc :transform)
         (assoc :left (px x) :top (px y)))
-   attrs))
+    attrs))
+
+(defn- transform-to-filter [{filter-ref :filter :as attrs}]
+  (prn filter-ref)
+  (let [filter-name (->> filter-ref
+                         (re-matches  #"url\(#(.*)\)")
+                         second
+                         keyword)
+        filter-desc (get @defs filter-name)
+        _ (prn "filter:" filter-desc)
+        x-offset nil
+        y-offset nil
+        blur nil]
+    nil))
+
+
+(defn transform-tag :filter [tag svg]
+  (let [[_ _ _ body] (svg/tag-parts tag)]
+    (->> body
+         (map #(transform-tag % svg))
+         (reduce merge))))
+
+(defn transform-tag :feOffset [tag svg]
+  (let [[_ _ attrs _] (svg/tag-parts tag)]
+    (-> attrs
+        (select-keys [:dx :dy])
+        (clojure.set/rename-keys {:dx :offset-x, :dy :offset-y}))))
+
+(defn transform-tag :feGaussianBlur [tag svg]
+  (let [[_ _ attrs _] (svg/tag-parts tag)]
+    (-> attrs
+        (select-keys [:std-deviation])
+        (clojure.set/rename-keys {:std-deviation :blur-radius}))))
 
 (defn- add-class [tag-name id]
   (if (and id (keyword? id))
@@ -124,9 +158,9 @@
               (add-pixels)
               (border-style)
               (clojure.set/rename-keys
-               {:fill :background-color
-                :fill-opacity :opacity
-                :x :left :y :top})
+                {:fill :background-color
+                 :fill-opacity :opacity
+                 :x :left :y :top})
               (dissoc :fill-rule :view-box :version :xlink-href :mask)
               ((fn [x]
                  (->> x
@@ -140,17 +174,32 @@
                        (assoc :background-image (format "url(%s)" (get-image-file-path id "svg"))))
                    x))))})
 
+
+(defn shadow? [tag]
+  (let [[tag-name _ attrs body] (svg/tag-parts tag)]
+    false
+    #_(and
+        (= :g tag-name)
+        (:filter attrs))))
+
 (defmulti transform-tag
-  (fn [tag svg] (svg/tag->name tag)))
+  (fn [tag svg]
+    (cond
+      (shadow? tag) :shadow
+      :else (svg/tag->name tag))))
+
+(defmethod transform-tag :shadow [tag svg]
+  nil)
+
 
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
-        t (add-class :div id)]
+        t                 (add-class :div id)]
     [:div {:style {:position "relative"}}
      (util/drop-blanks
-      (into
-       [t (attrs->style attrs)]
-       (->> body (map #(transform-tag % svg)))))]))
+       (into
+         [t (attrs->style attrs)]
+         (->> body (map #(transform-tag % svg)))))]))
 
 (defn inject-attrs [tag attrs]
   (if (svg/tag? tag)
@@ -158,24 +207,23 @@
       (into [(first tag) (merge attrs attrs2)] body))
     tag))
 
+
 (defmethod transform-tag :g [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)
         group-content (into
-                       [(add-class :div id) {:style {:position :relative
-                                                     :min-width "2000px"
-                                                     }}]
-                       (->> body (map
-                                  #(transform-tag
-                                    (inject-attrs % (dissoc attrs :transform ))
-                                    svg))))]
-    (if (:transform attrs)
-      [:div {:style (merge {:position :absolute
-                            ;; :overflow :hidden
-                            }
-                           (transform-to-pos
-                            (select-keys attrs [:transform])))}
-       group-content]
+                        [(add-class :div id) {:style {:position :relative
+                                                      :min-width "2000px"}}]
+                        (->> body (map
+                                    #(transform-tag
+                                       (inject-attrs % (dissoc attrs :transform ))
+                                       svg))))
+        styles (cond-> {}
+                 (:transform attrs) (merge {:position :absolute} (transform-to-pos attrs))
+                 (:filter attrs) (merge (transform-to-filter attrs)))]
+
+    (if styles
+      [:div {:style styles} group-content]
       group-content)))
 
 (defmethod transform-tag :rect [tag svg]
@@ -274,6 +322,7 @@
 (defmethod transform-tag :defs [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)]
     (doseq [tag body]
+      (swap! defs assoc (svg/tag->id tag) tag)
       (transform-tag tag svg))))
 
 (defmethod transform-tag :pattern [tag svg]
