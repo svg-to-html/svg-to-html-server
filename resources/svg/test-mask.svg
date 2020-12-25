@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="856px" height="715px" viewBox="0 0 856 715" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>test-mask</title>
+    <defs>
+        <rect id="path-1" x="0" y="0" width="363" height="290"></rect>
+    </defs>
+    <g id="Page-1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle" stroke="#979797" fill="#030202" x="0.5" y="0.5" width="855" height="714"></rect>
+        <g id="Rectangle" transform="translate(200.000000, 237.000000)">
+            <mask id="mask-2" fill="white">
+                <use xlink:href="#path-1"></use>
+            </mask>
+            <use id="Mask" fill="#EB0B0B" xlink:href="#path-1"></use>
+            <rect stroke="#979797" fill="#D8D8D8" mask="url(#mask-2)" x="128.5" y="121.5" width="365" height="267"></rect>
+        </g>
+    </g>
+</svg>
