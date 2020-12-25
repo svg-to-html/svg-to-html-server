@@ -82,10 +82,10 @@
   (-> x
       ((fn [{:keys [stroke stroke-width stroke-dasharray] :as x}]
          (if (and
-               (nil? stroke-dasharray)
-               (or (nil? stroke)
-                   (= stroke "none")
-                   (= stroke-width "0")))
+              (nil? stroke-dasharray)
+              (or (nil? stroke)
+                  (= stroke "none")
+                  (= stroke-width "0")))
            x
            (assoc x :border (str (if stroke-dasharray
                                    "1"
@@ -98,12 +98,13 @@
            (assoc x :border-radius (str rx "px"))
            x)))
       ((fn [{:keys [cx cy rx ry r] :as x}]
+         (prn cx cy)
          (if (and cx cy)
            (let [sizes (cond
                          r [r r]
                          (and rx ry) [rx ry])
                  [w h] (mapv (comp (partial * 2) read-string) sizes)
-                 [left top] (mapv (comp  #(- % (/ % 2))) read-string [cx cy])]
+                 [left top] (mapv (comp  #(- % (/ % 2)) read-string) [cx cy])]
              (-> x
                  (assoc :width (str w "px"))
                  (assoc :height (str h "px"))
@@ -111,7 +112,7 @@
                  (assoc :left (str left "px"))
                  (assoc :top (str top "px"))))
            x)))
-      (dissoc :stroke :stroke-width :rx :r :cx :cy :stroke-linejoin :stroke-dasharray)))
+      (dissoc :stroke :stroke-width :rx :ry :r :cx :cy :stroke-linejoin :stroke-dasharray)))
 
 (defn- attrs->style [attrs]
   {:style (-> attrs
