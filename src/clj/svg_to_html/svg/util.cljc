@@ -22,5 +22,10 @@
 
     res))
 
+
+(defn update-map [m f]
+  (reduce-kv (fn [m k v]
+               (assoc m k (f v))) {} m))
+
 (defn uuid []
   (.toString (java.util.UUID/randomUUID)))
