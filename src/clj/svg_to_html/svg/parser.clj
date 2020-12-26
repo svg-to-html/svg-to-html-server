@@ -27,11 +27,9 @@
 (defn optimize-id [s]
   (-> s
       (str/trim)
-      (str/replace #"\s" "-")
-      (str/replace #"[:]$" "")
-      (str/replace #"[,!~\":'$]" "")
-      (str/replace #"[\-_]+" "-")
-      ->kebab-case))
+      ->kebab-case
+      (str/replace #"^[^a-z]+" "")
+      (str/replace #"[^a-z\d-]+" "")))
 
 (defn- optimize-tag-name [s]
   (if-let [id (tag->id s)]

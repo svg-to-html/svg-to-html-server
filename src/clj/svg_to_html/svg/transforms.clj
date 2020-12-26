@@ -146,10 +146,7 @@
 (defn- attrs->style [attrs]
   {:style (-> attrs
               (transform-to-pos)
-              ((fn [{:keys [x y] :as attrs}]
-                 (if (or x y)
-                   (assoc attrs :position "absolute")
-                   attrs)))
+              (assoc :position :absolute)
               (add-pixels)
               (assoc :box-sizing "border-box")
               (border-style)
@@ -199,7 +196,7 @@
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)]
-    [:div {:style {:position "relative"}}
+    [:div {:style {:position :relative}}
      (util/drop-blanks
       (into
        [t (attrs->style attrs)]
@@ -215,17 +212,14 @@
   (let [[_ id attrs body] (svg/tag-parts tag)
         t (add-class :div id)
         group-content (into
-                       [(add-class :div id) {:style {:position "relative"
-                                                     :min-width "2000px"
-                                                     }}]
+                       [(add-class :div id) {:style {:position :relative
+                                                     :min-width "2000px"}}]
                        (->> body (map
                                   #(transform-tag
                                     (inject-attrs % (dissoc attrs :transform ))
                                     svg))))]
     (if (:transform attrs)
-      [:div {:style (merge {:position "absolute"
-                            ;; :overflow :hidden
-                            }
+      [:div {:style (merge {:position :absolute}
                            (transform-to-pos
                              (select-keys attrs [:transform])))}
        group-content]
@@ -304,23 +298,29 @@
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
-(defmethod transform-tag :path [tag svg]
+(defn extract-tag-to-svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         bounds (select-keys attrs [:width :height])
         {:keys [width height]} bounds
         file-path  (save-svg id (h/html
-                                  [:svg
-                                   (merge
-                                     {:viewBox (str "0 0 " width " " height)
-                                      :version "1.1"
-                                      :xmlns "http://www.w3.org/2000/svg"
-                                      :xmlns:xlink "http://www.w3.org/1999/xlink"}
-                                     (transform-to-pos (select-keys attrs [:width :height])))
-                                   (svg/find-tag svg :defs)
-                                   tag]))]
+                                 [:svg
+                                  (merge
+                                   {:viewBox (str "0 0 " width " " height)
+                                    :version "1.1"
+                                    :xmlns "http://www.w3.org/2000/svg"
+                                    :xmlns:xlink "http://www.w3.org/1999/xlink"}
+                                   (transform-to-pos (select-keys attrs [:width :height])))
+                                  (svg/find-tag svg :defs)
+                                  tag]))]
     [:img (merge
-            {:src file-path :style {:position "absolute"}}
-            (transform-to-pos bounds))]))
+           {:src file-path :style {:position "absolute"}}
+           (transform-to-pos bounds))]))
+
+(defmethod transform-tag :path [tag svg]
+  (extract-tag-to-svg tag svg))
+
+(defmethod transform-tag :polygon [tag svg]
+  (extract-tag-to-svg tag svg))
 
 (defmethod transform-tag :defs [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)]
@@ -347,7 +347,7 @@
 (defn- relative-div? [x]
   (when (vector? x)
    (let [[_ _ attrs _] (svg/tag-parts x)]
-     (-> attrs :style :position (= "relative")))))
+     (-> attrs :style :position (= :relative)))))
 
 (defn- inline-divs [dom]
   (walk/postwalk
@@ -410,7 +410,7 @@
 
 (defn transform [svg & [config]]
   (when-let [img-dir (io/resource (str "public/" (:img config)))]
-    (->> img-dir io/file .listFiles (map io/delete-file)))
+    (->> img-dir io/file file-seq (map io/delete-file)))
   (-> (transform-tag svg svg)
       inline-divs
       add-bounds-to-relative
