@@ -14,6 +14,8 @@
 (def known-patterns (atom {}))
 (def defs (atom {}))
 
+(def defs (atom {}))
+
 (defn get-image-file-path [id ext]
   (str (:img config) "/" (or (some-> id name) (util/uuid)) "." ext))
 
@@ -154,10 +156,12 @@
               (assoc :box-sizing "border-box")
               (border-style)
               (clojure.set/rename-keys
+
                {:fill :background-color
                 :fill-opacity :opacity
                 :x :left :y :top})
               (remove-svg-styles)
+
               ((fn [x]
                  (->> x
                       (remove #(-> % second (= "none")))
@@ -193,17 +197,34 @@
                                   (px-or-percent (:y pattern-attrs))))))
                    x))))})
 
+(defn shadow? [tag]
+  (let [[tag-name _ attrs body] (svg/tag-parts tag)]
+    false
+    #_(and
+        (= :g tag-name)
+        (:filter attrs))))
+
 (defmulti transform-tag
-  (fn [tag svg] (svg/tag->name tag)))
+  (fn [tag svg]
+    (cond
+      (shadow? tag) :shadow
+      :else (svg/tag->name tag))))
+
+(defmethod transform-tag :shadow [tag svg]
+  nil)
+
 
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
+
         t (add-class :div id)]
     [:div {:style {:position :relative}}
+
      (util/drop-blanks
        (into
          [t (attrs->style attrs)]
          (->> body (map #(transform-tag % svg)))))]))
+
 
 (defn- transform-filter [{filter-ref :filter :as attrs}]
   (if filter-ref
@@ -225,7 +246,6 @@
   (let [rgba-vec (mapv color-matrix [0 6 12 18])]
     ;;XXX this is a temporary solution
     (str "rgba(0,0,0," (last rgba-vec) ")")))
-
 
 (defmethod transform-tag :filter [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)
@@ -291,6 +311,7 @@
                                       :min-width "2000px"}}]
                             body)
         attrs             (dissoc attrs :filter)]
+
     (if (:transform attrs)
       [:div {:style (merge {:position :absolute}
                            (transform-to-pos
@@ -319,7 +340,7 @@
 
 (defmethod transform-tag :circle [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
-        t (add-class :div id)]
+        t                 (add-class :div id)]
     (into
       [t (attrs->style attrs)]
       (->> body (map #(transform-tag % svg))))))
@@ -368,11 +389,11 @@
 
 (defmethod transform-tag :use [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
-        link-id (fix-id (:xlink-href attrs))]
+        link-id           (fix-id (:xlink-href attrs))]
     (transform-tag
-     (let [tag (svg/find-tag-by-id svg link-id)]
-       (inject-attrs tag attrs))
-     svg)))
+      (let [tag (svg/find-tag-by-id svg link-id)]
+        (inject-attrs tag attrs))
+      svg)))
 
 (defmethod transform-tag :image [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
@@ -409,6 +430,7 @@
 
 (defmethod transform-tag :defs [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)]
+
     (doseq [tag body]
       (swap! defs assoc (svg/tag->id tag) tag)
       (if (= :pattern (svg/tag->name tag))

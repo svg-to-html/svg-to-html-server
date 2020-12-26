@@ -34,7 +34,7 @@
 
 (comment
 
-  (svg->cljs "resources/svg/test-2.svg"
+  (svg->cljs "resources/svg/upload.svg"
              "src/cljs/svg_to_html/test_dom.cljs"
              "svg-to-html.test-dom")
 
