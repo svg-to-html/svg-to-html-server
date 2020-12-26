@@ -36,4 +36,6 @@
 
   (svg->cljs "resources/svg/test-2.svg"
              "src/cljs/svg_to_html/test_dom.cljs"
-             "svg-to-html.test-dom"))
+             "svg-to-html.test-dom")
+
+  )
