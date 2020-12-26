@@ -9,8 +9,9 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pp]))
 
-(def ^:dynamic config {:base-dir "resources/public"
-                       :img "gen-img"})
+(def ^:dynamic config {:base-dir "resources/public" :img "gen-img"})
+
+(def known-patterns (atom {}))
 
 (def defs (atom {}))
 
@@ -38,6 +39,31 @@
     (string? x) (read-string x)
     :else x))
 
+
+(defn- px-or-percent [x]
+  (if (str/ends-with? x "%")
+    x
+    (str x "px")))
+
+
+(defn- parse-percent [x]
+  (if (number? x)
+    x
+    (do
+      (assert (str/ends-with? x "%"))
+      (Float/parseFloat (subs x 0 (dec (count x)))))))
+
+
+(defn- parse-px [x]
+  (if (number? x)
+    x
+    (do
+      (assert (re-matches #".*(\d|px)" x))
+      (Float/parseFloat (cond-> x
+                          (str/ends-with? x "px")
+                          (subs 0 (- (count x) 2)))))))
+
+
 (defn- px [x]
   (str (round x) "px"))
 
@@ -57,7 +83,7 @@
        (map (fn [[k v]]
               [k
                (if (and
-                    (#{:width :height :top :left :x :y :font-size :letter-spacing} k)
+                    (#{:width :height :top :left :x :y :font-size :letter-spacing :line-spacing} k)
                     (-> v str (str/ends-with? "px") not))
                  (px v)
                  v)]))
@@ -126,30 +152,56 @@
            x)))
       (dissoc :stroke :stroke-width :rx :ry :r :cx :cy :stroke-linejoin :stroke-dasharray)))
 
+(defn remove-svg-styles [x]
+  (dissoc x :fill-rule :view-box :version :xlink-href :mask :fill-rule :stroke))
+
 (defn- attrs->style [attrs]
   {:style (-> attrs
               (transform-to-pos)
-              ((fn [{:keys [x y] :as attrs}]
-                 (if (or x y)
-                   (assoc attrs :position "absolute")
-                   attrs)))
+              (assoc :position :absolute)
               (add-pixels)
+              (assoc :box-sizing "border-box")
               (border-style)
               (clojure.set/rename-keys
-                {:fill         :background-color
-                 :fill-opacity :opacity
-                 :x            :left :y :top})
-              (dissoc :fill-rule :view-box :version :xlink-href :mask)
+
+               {:fill :background-color
+                :fill-opacity :opacity
+                :x :left :y :top})
+              (remove-svg-styles)
+
               ((fn [x]
                  (->> x
                       (remove #(-> % second (= "none")))
                       (into {}))))
               ((fn [x]
-                 (if-let [[_ id] (some->> (:background-color x)
-                                          (re-matches #"url\(#(.+)\)"))]
+                 (if-let [{:keys [pattern-attrs use-attrs image-attrs image-path]}
+                          (some->> (:background-color x)
+                                   (re-matches #"url\(#(.+)\)")
+                                   (second)
+                                   (keyword)
+                                   (get @known-patterns))]
                    (-> x
                        (dissoc :background-color)
-                       (assoc :background-image (format "url(%s)" (get-image-file-path id "svg"))))
+                       (assoc
+                         :background-image (format "url(%s)" image-path)
+                         :background-repeat (if (= "userSpaceOnUse" (:pattern-units pattern-attrs))
+                                              "repeat"
+                                              "no-repeat")
+                         :background-size (let [[x y] (:scale (svg/transform-str->map (:transform use-attrs)))]
+                                            (format "%s %s"
+                                                    (str (* x (parse-px (:width image-attrs))) "px")
+                                                    (str (* y (parse-px (:height image-attrs))) "px"))))
+                       (cond->
+                         (:x pattern-attrs)
+                         (assoc :background-position-x
+                                (if (str/ends-with? (:x pattern-attrs) "%")
+                                  (str (* (parse-px (:width x)) (parse-percent (:x pattern-attrs)) 1/100) "px")
+                                  (px-or-percent (:x pattern-attrs))))
+                         (:y pattern-attrs)
+                         (assoc :background-position-y
+                                (if (str/ends-with? (:y pattern-attrs) "%")
+                                  (str (* (parse-px (:height x)) (parse-percent (:y pattern-attrs)) 1/100) "px")
+                                  (px-or-percent (:y pattern-attrs))))))
                    x))))})
 
 (defn shadow? [tag]
@@ -171,8 +223,10 @@
 
 (defmethod transform-tag :svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
-        t                 (add-class :div id)]
-    [:div {:style {:position "relative"}}
+
+        t (add-class :div id)]
+    [:div {:style {:position :relative}}
+
      (util/drop-blanks
        (into
          [t (attrs->style attrs)]
@@ -243,19 +297,24 @@
 
 (defmethod transform-tag :g [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
+        t (add-class :div id)
         body              (update (vec body) 0 #(inject-attrs % (select-keys attrs [:filter])))
         body              (map #(transform-tag % svg) body)
-        group-content     (into
-                            [(add-class :div id)
-                             {:style {:position  :relative
-                                      :min-width "2000px"}}]
-                            body)
         attrs             (dissoc attrs :filter)
-        styles            (cond-> {}
-                            (:transform attrs) (merge {:position :absolute} {:my-style "style"} (transform-to-pos attrs)))]/
-       (if styles
-         [:div {:style styles} group-content]
-         group-content)))
+        group-content (into
+                       [(add-class :div id) {:style {:position :relative
+                                                     :min-width "2000px"}}]
+                       (->> body (map
+                                  #(transform-tag
+                                    (inject-attrs % (dissoc attrs :transform ))
+                                    svg))))]
+        
+    (if (:transform attrs)
+      [:div {:style (merge {:position :absolute}
+                           (transform-to-pos
+                             (select-keys attrs [:transform])))}
+       group-content]
+      group-content)))
 
 (defmethod transform-tag :rect [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
@@ -288,8 +347,7 @@
         t (add-class :div id)
         shift (-> attrs :font-size)]
     (into
-      [t {:data-svg "text"
-          :style (->
+      [t {:style (->
                    attrs
                    (clojure.set/rename-keys {:fill :color})
                    add-pixels
@@ -298,15 +356,14 @@
            (map (fn [x]
                   (let [[_ id attrs body] (svg/tag-parts x)]
                     [:div
-                     {:data-svg "tspan"
-                      :style (-> attrs
+                     {:style (-> attrs
                                  ((fn [{:keys [y font-size] :as o}]
                                     (assoc o :y (- (double (round y))
                                                    (double (round (or font-size shift)))))))
                                  (clojure.set/rename-keys {:fill :color :x :left :y :top})
                                  (select-keys [:font-family :font-size :font-weight :color
                                                :letter-spacing :top :left])
-                                 (assoc :position :absolute :white-space :nowrap)
+                                 (assoc :position "absolute" :white-space :nowrap)
                                  add-pixels)}
                      (last body)])))))))
 
@@ -316,7 +373,7 @@
      {:style (-> attrs
                  (clojure.set/rename-keys {:fill :color :x :left :y :top})
                  (select-keys [:font-family :font-size :color :letter-spacing :top :left])
-                 (assoc :position :absolute :white-space :nowrap)
+                 (assoc :position "absolute" :white-space :nowrap)
                  add-pixels)}
      (last body)]))
 
@@ -337,42 +394,49 @@
            (transform-to-pos (select-keys attrs [:width :height]))
            (attrs->style (dissoc attrs :xlink-href)))]))
 
-(defmethod transform-tag :path [tag svg]
+(defn extract-tag-to-svg [tag svg]
   (let [[_ id attrs body] (svg/tag-parts tag)
         bounds (select-keys attrs [:width :height])
         {:keys [width height]} bounds
         file-path  (save-svg id (h/html
-                                  [:svg
-                                   (merge
-                                     {:viewBox (str "0 0 " width " " height)
-                                      :version "1.1"
-                                      :xmlns "http://www.w3.org/2000/svg"
-                                      :xmlns:xlink "http://www.w3.org/1999/xlink"}
-                                     (transform-to-pos (select-keys attrs [:width :height])))
-                                   (svg/find-tag svg :defs)
-                                   tag]))]
+                                 [:svg
+                                  (merge
+                                   {:viewBox (str "0 0 " width " " height)
+                                    :version "1.1"
+                                    :xmlns "http://www.w3.org/2000/svg"
+                                    :xmlns:xlink "http://www.w3.org/1999/xlink"}
+                                   (transform-to-pos (select-keys attrs [:width :height])))
+                                  (svg/find-tag svg :defs)
+                                  tag]))]
     [:img (merge
-            {:src file-path :style {:position :absolute}}
-            (transform-to-pos bounds))]))
+           {:src file-path :style {:position "absolute"}}
+           (transform-to-pos bounds))]))
+
+(defmethod transform-tag :path [tag svg]
+  (extract-tag-to-svg tag svg))
+
+(defmethod transform-tag :polygon [tag svg]
+  (extract-tag-to-svg tag svg))
 
 (defmethod transform-tag :defs [tag svg]
   (let [[_ _ _ body] (svg/tag-parts tag)]
-    (doseq [tag body]
+    (doseq [tag (->> body (filter #(= :pattern (svg/tag->name %))))]
       (swap! defs assoc (svg/tag->id tag) tag)
       (transform-tag tag svg))))
 
 (defmethod transform-tag :pattern [tag svg]
-  (let [[_ id] (svg/tag-parts tag)
-        file-path (save-svg id (h/html [:svg {:version "1.1"
-                                              :width "100%"
-                                              :height "100%"
-                                              :xmlns "http://www.w3.org/2000/svg"
-                                              :xmlns:xlink "http://www.w3.org/1999/xlink"}
-                                        [:defs tag]
-                                        [:rect {:width "100%"
-                                                :height "100%"
-                                                :fill (format "url(#%s)" id)}]]))]
-    nil))
+  (let [[_ pattern-id pattern-attrs body] (svg/tag-parts tag)]
+    (when (= 1 (count body))
+      (let [[maybe-use _ {href :xlink-href :as use-attrs}] (svg/tag-parts (first body))]
+        (when (= :use maybe-use)
+          (let [[maybe-image image-id image-attrs] (svg/tag-parts (svg/find-tag-by-id svg (fix-id href)))]
+            (when (= :image maybe-image)
+              (swap! known-patterns assoc pattern-id
+                     {:pattern-attrs pattern-attrs
+                      :use-attrs use-attrs
+                      :image-attrs (dissoc image-attrs :xlink-href)
+                      :image-path (save-base64 image-id (:xlink-href image-attrs))})
+              nil)))))))
 
 (defmethod transform-tag :mask [tag svg]) ;; div
 (defmethod transform-tag :default [tag svg])
@@ -401,23 +465,61 @@
        x))
    dom))
 
+(defn get-class [t]
+  (when (-> t name (str/includes? "."))
+   (-> t name (str/split #"\.") last)))
+
+(defn remove-style-attrs [x]
+  (if (vector? x)
+   (let [[t attrs & body] x]
+     (assert (map? attrs))
+     (into
+      [t (if-not (get-class t)
+           attrs
+           (dissoc attrs :style))]
+      (->> body (map remove-style-attrs))))
+   x))
+
+(defn create-styles [x]
+  (when (vector? x)
+   (let [[t attrs & body] x]
+     (assert (map? attrs))
+     (if (get-class t)
+       (into
+        [(keyword (str "." (get-class t))) (remove-svg-styles (:style attrs))]
+        (->> body (map create-styles)))
+       (->> body (map create-styles) vec)))))
+
+(defn extract-styles [dom]
+  (if (:inline-styles config)
+    [nil dom]
+    [
+     (->>
+      dom
+      create-styles
+      util/drop-blanks
+      (walk/postwalk
+       (fn [x]
+         (if (and (vector? x) (-> x count (= 1)))
+           (first x)
+           x))))
+     (util/drop-blanks (remove-style-attrs dom))]))
+
 (defn transform [svg & [config]]
-  #_(when-let [img-dir (io/resource (str "public/" (:img config)))]
-    (io/delete-file img-dir))
+  (when-let [img-dir (io/resource (str "public/" (:img config)))]
+    (->> img-dir io/file file-seq (map io/delete-file)))
   (-> (transform-tag svg svg)
       inline-divs
       add-bounds-to-relative
       ;; group-svgs
       ;; add-flex-layout
       ;; optimize-texts
-      ;; extract-styles
-
-      ))
+      extract-styles))
 
 (comment
 
   (svg-to-html.svg.core/svg->cljs
-   "resources/svg/test-2.svg"
+   "resources/svg/upload.svg"
    "src/cljs/svg_to_html/test_dom.cljs"
    "svg-to-html.test-dom")
 

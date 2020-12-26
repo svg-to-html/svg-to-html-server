@@ -7,7 +7,7 @@
 (def styles
   [:style
    (gr/css
-    [:.contaner
+    [:.container
      {:position :relative
       :margin "0px"}
      %s])])
