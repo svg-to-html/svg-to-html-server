@@ -90,8 +90,6 @@
                  v)]))
        (into {})))
 
-(prn @defs)
-
 (defn- transform-to-pos [{:keys [transform] :as attrs}]
   (if-let [[x y] (:translate (svg/transform-str->map transform))]
     (-> attrs
@@ -234,8 +232,6 @@
                            keyword)
           filter-tag  (get @defs filter-name)]
 
-      (prn filter-tag)
-
       (transform-tag filter-tag {}))))
 
 (defn str->color-matrix [cm-string]
@@ -264,7 +260,6 @@
                              blur    (:blur-radius filter-data)]
                          [(str "blur(" blur ")") (str "opacity(" opacity "%)")]))
         style        (->> style-vec (interpose " ") (apply str))]
-    (prn "style:" style)
     (if (:box-shadow filter-data)
       {:box-shadow style}
       {:filter style})))
@@ -330,10 +325,9 @@
   (let [[_ id attrs body] (svg/tag-parts tag)
         t                 (add-class :div id)
         style             (-> attrs
-                              transform-filter
-                              (merge (dissoc attrs :filter))
+                              #_transform-filter
+                              #_(merge (dissoc attrs :filter))
                               attrs->style)]
-    (prn style)
     (into
       [t style]
       (->> body (map #(transform-tag % svg))))))
